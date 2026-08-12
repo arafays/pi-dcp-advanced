@@ -66,7 +66,7 @@ describe("dcpCompressHandler", () => {
     await dcpCompressHandler("", makeCtx(), deps)
 
     expect(state.manualMode).toBe("compress-pending")
-    expect(state.pendingManualTrigger).toEqual({ sessionId: "test-session", prompt: expectedPrompt })
+    expect(state.pendingManualTrigger).toEqual({ sessionId: "test-session", prompt: expectedPrompt, priorMode: false })
   })
 
   it("persists the updated state", async () => {

@@ -81,6 +81,8 @@ export interface Prune {
 export interface PendingManualTrigger {
   sessionId: string
   prompt: string
+  /** manualMode before /dcp-compress switched to "compress-pending"; restored after delivery. */
+  priorMode: false | "active" | "compress-pending"
 }
 
 export interface MessageIdState {

@@ -16,11 +16,11 @@ import type { PendingManualTrigger, SessionState } from "./state.js"
 // drives the model to invoke the `compress` tool (registered by WP6).
 //
 // `state.pendingManualTrigger` is still set for parity/state-tracking: WP11's
-// context handler clears it (and resets `manualMode` back to "active") once it
-// observes the trigger was delivered (a user message containing
-// `<compress triggered manually>`). It is a live-only flag — not part of
-// `PersistedStateSchema` — so it does not survive /reload, which is acceptable
-// because the trigger is sent in the same command.
+// context handler restores `manualMode` to its prior value and clears the
+// pending flag once it observes the trigger was delivered (a user message
+// containing `<compress triggered manually>`). It is a live-only flag — not
+// part of `PersistedStateSchema` — so it does not survive /reload, which is
+// acceptable because the trigger is sent in the same command.
 // ---------------------------------------------------------------------------
 
 export const COMPRESS_TRIGGER_PROMPT = [
@@ -76,7 +76,8 @@ export async function dcpCompressHandler(
     // returns the Ref-held object, so mutating it updates the DcpState service.
     const pendingManualTrigger: PendingManualTrigger = {
       sessionId: state.sessionId ?? "",
-      prompt: triggerPrompt
+      prompt: triggerPrompt,
+      priorMode: state.manualMode
     }
     state.manualMode = "compress-pending"
     state.pendingManualTrigger = pendingManualTrigger
