@@ -21,6 +21,9 @@ importers:
       '@earendil-works/pi-coding-agent':
         specifier: ^0.84.1
         version: 0.84.1
+      '@earendil-works/pi-tui':
+        specifier: 0.84.1
+        version: 0.84.1
       '@effect/language-service':
         specifier: ^0.87.2
         version: 0.87.2

@@ -22,6 +22,7 @@
     "@biomejs/biome": "^2.5.8",
     "@earendil-works/pi-ai": "^0.84.1",
     "@earendil-works/pi-coding-agent": "^0.84.1",
+    "@earendil-works/pi-tui": "0.84.1",
     "@effect/language-service": "^0.87.2",
     "@effect/platform": "^0.97.1",
     "@effect/tsgo": "^0.36.4",
