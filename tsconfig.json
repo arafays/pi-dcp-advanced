@@ -40,5 +40,9 @@
     "noUncheckedSideEffectImports": true,
     "moduleDetection": "force",
     "skipLibCheck": true,
-  }
+  },
+  // Differential tests import the sibling opencode-dcp SOURCE (.ts, extensionless
+  // imports) which tsgo/nodenext rejects but vitest/esbuild resolves. They are
+  // runtime-only: validated by `aube exec vitest run`, excluded from typecheck.
+  "exclude": ["src/**/*.diff.test.ts"]
 }

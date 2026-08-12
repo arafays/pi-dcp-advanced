@@ -1,0 +1,287 @@
+import {
+  type ContextEvent,
+  type ExtensionContext,
+  type SessionEntry,
+  sessionEntryToContextMessages
+} from "@earendil-works/pi-coding-agent"
+import type { ResolvedConfig } from "./config.js"
+import type { CompressionBlock, SessionState } from "./state.js"
+
+// ---------------------------------------------------------------------------
+// Message types
+//
+// `AgentMessage` is not exported from `@earendil-works/pi-coding-agent`'s root
+// entry point (it is declared in the transitive `@earendil-works/pi-agent-core`
+// package), so derive it from the exported `ContextEvent` contract.
+// ---------------------------------------------------------------------------
+
+export type AgentMessage = ContextEvent["messages"][number]
+export type ToolResultMessage = Extract<AgentMessage, { role: "toolResult" }>
+export type CustomMessage = Extract<AgentMessage, { role: "custom" }>
+
+// ---------------------------------------------------------------------------
+// Replacement strings (exact wording from the DCP source)
+// ---------------------------------------------------------------------------
+
+export const PRUNED_TOOL_OUTPUT_REPLACEMENT =
+  "[Output removed to save context - information superseded or no longer needed]"
+export const PRUNED_TOOL_ERROR_REPLACEMENT = "[input removed due to failed tool call]"
+export const PRUNED_QUESTION_INPUT_REPLACEMENT = "[questions removed - see output for user's answers]"
+
+// ---------------------------------------------------------------------------
+// Protected-pattern matching (ported from ../opencode-dynamic-context-pruning/lib/protected-patterns.ts)
+// ---------------------------------------------------------------------------
+
+function normalizePath(input: string): string {
+  return input.replaceAll("\\", "/")
+}
+
+const REGEX_SPECIAL_CHARS = /[.*+?^${}()|[\]\\]/
+
+function escapeRegExpChar(ch: string): string {
+  return REGEX_SPECIAL_CHARS.test(ch) ? `\\${ch}` : ch
+}
+
+/** Glob match (supports `*`, `**`, and `?` wildcards) against normalized forward-slash paths. */
+export function matchesGlob(inputPath: string, pattern: string): boolean {
+  if (!pattern) return false
+
+  const input = normalizePath(inputPath)
+  const pat = normalizePath(pattern)
+
+  let regex = "^"
+  for (let i = 0; i < pat.length; i++) {
+    const ch = pat.charAt(i)
+
+    if (ch === "*") {
+      const next = pat.charAt(i + 1)
+      if (next === "*") {
+        const after = pat.charAt(i + 2)
+        if (after === "/") {
+          regex += "(?:.*/)?"
+          i += 2
+          continue
+        }
+        regex += ".*"
+        i++
+        continue
+      }
+      regex += "[^/]*"
+      continue
+    }
+
+    if (ch === "?") {
+      regex += "[^/]"
+      continue
+    }
+
+    if (ch === "/") {
+      regex += "/"
+      continue
+    }
+
+    regex += escapeRegExpChar(ch)
+  }
+  regex += "$"
+
+  return new RegExp(regex).test(input)
+}
+
+/** Extract candidate file paths from a tool call's arguments (`filePath` and `path`). */
+export function getFilePathsFromParameters(_tool: string, parameters: unknown): string[] {
+  if (typeof parameters !== "object" || parameters === null) return []
+
+  const params = parameters as Record<string, unknown>
+  const paths: string[] = []
+
+  if (typeof params.filePath === "string") {
+    paths.push(params.filePath)
+  }
+  if (typeof params.path === "string") {
+    paths.push(params.path)
+  }
+
+  return [...new Set(paths)].filter((p) => p.length > 0)
+}
+
+export function isFilePathProtected(filePaths: readonly string[], patterns: readonly string[]): boolean {
+  if (filePaths.length === 0) return false
+  if (patterns.length === 0) return false
+  return filePaths.some((path) => patterns.some((pattern) => matchesGlob(path, pattern)))
+}
+
+const GLOB_CHARS = /[*?]/
+
+export function isToolNameProtected(toolName: string, patterns: readonly string[]): boolean {
+  if (!toolName || patterns.length === 0) return false
+
+  const exactPatterns = new Set<string>()
+  const globPatterns: string[] = []
+
+  for (const pattern of patterns) {
+    if (GLOB_CHARS.test(pattern)) {
+      globPatterns.push(pattern)
+    } else {
+      exactPatterns.add(pattern)
+    }
+  }
+
+  if (exactPatterns.has(toolName)) return true
+  return globPatterns.some((pattern) => matchesGlob(toolName, pattern))
+}
+
+// ---------------------------------------------------------------------------
+// Prune steps (operate in place on a copy supplied by `prune`)
+// ---------------------------------------------------------------------------
+
+/**
+ * Replace the text blocks of tool outputs marked in `state.prune.tools` (by the
+ * dedup strategy) with the placeholder. Protected tools (config.commands.
+ * protectedTools) and tools whose args match a protected file pattern are left
+ * untouched. Error results are handled by `pruneToolErrors`.
+ */
+export function pruneToolOutputs(messages: AgentMessage[], state: SessionState, config: ResolvedConfig): void {
+  for (const message of messages) {
+    if (message.role !== "toolResult") continue
+    if (message.isError) continue
+    if (isToolNameProtected(message.toolName, config.commands.protectedTools)) continue
+    if (!state.prune.tools.has(message.toolCallId)) continue
+
+    const parameters = state.toolParameters.get(message.toolCallId)?.parameters
+    const filePaths = getFilePathsFromParameters(message.toolName, parameters)
+    if (isFilePathProtected(filePaths, config.protectedFilePatterns)) continue
+
+    message.content = message.content.map((block) =>
+      block.type === "text" ? { ...block, text: PRUNED_TOOL_OUTPUT_REPLACEMENT } : block
+    )
+  }
+}
+
+/**
+ * Clear the input-bearing `details` of errored tool results once they are older
+ * than `config.strategies.purgeErrors.turns` turns. Protected tools (config.
+ * strategies.purgeErrors.protectedTools) and protected-file args are skipped.
+ */
+/**
+ * Mark-then-apply: clear the verbose `details` of errored tool results that
+ * were marked for pruning (by WP5 `purgeErrors` / `deduplicate`, which write
+ * `state.prune.tools`). Mirrors `lib/messages/prune.ts:128` which reads
+ * `state.prune.tools.has(callID)` + `status === "error"`. Protected-tool and
+ * turn-threshold gating already happened at mark time, so this is a pure
+ * applier. In Pi the verbose error payload lives on `ToolResultMessage.details`
+ * (the equivalent of the OpenCode tool-part's string inputs).
+ */
+export function pruneToolErrors(messages: AgentMessage[], state: SessionState): void {
+  if (state.prune.tools.size === 0) return
+
+  for (const message of messages) {
+    if (message.role !== "toolResult") continue
+    if (!message.isError) continue
+    if (!state.prune.tools.has(message.toolCallId)) continue
+
+    delete message.details
+  }
+}
+
+function makeCompressionSummaryMessage(block: CompressionBlock): CustomMessage {
+  return {
+    role: "custom",
+    customType: "dcp-compression-summary",
+    content: block.summary,
+    display: false,
+    details: { blockId: block.blockId },
+    timestamp: Date.now()
+  }
+}
+
+/**
+ * Drop messages whose branch entry id sits inside an active compression range
+ * and inject a `dcp-compression-summary` CustomMessage at each active anchor.
+ *
+ * `ctx.sessionManager.buildContextEntries()` returns the compaction-aware entry
+ * list that produced the context `messages` array, and
+ * `sessionEntryToContextMessages` is Pi's exact entry->AgentMessage projection
+ * (each entry yields 0 or 1 message), so message-producing entries pair 1:1
+ * with `messages` by index. When `ctx` is omitted, range application is skipped.
+ */
+export function applyCompressedRanges(messages: AgentMessage[], state: SessionState, ctx?: ExtensionContext): void {
+  if (ctx === undefined) return
+  if (state.prune.messages.byMessageId.size === 0 && state.prune.messages.activeByAnchorMessageId.size === 0) {
+    return
+  }
+
+  const contextEntries: SessionEntry[] = ctx.sessionManager.buildContextEntries()
+  const entryIds: string[] = []
+  for (const entry of contextEntries) {
+    if (sessionEntryToContextMessages(entry).length > 0) {
+      entryIds.push(entry.id)
+    }
+  }
+
+  // Defensive: if the entry<->message mapping drifted (Pi internals changed or
+  // an entry unexpectedly yields >1 message), bail rather than mis-assign entry
+  // ids and corrupt the session. The caller's messages are left untouched.
+  if (entryIds.length !== messages.length) return
+
+  const result: AgentMessage[] = []
+
+  for (let i = 0; i < messages.length; i++) {
+    const message = messages[i]
+    if (message === undefined) continue
+
+    const entryId = entryIds[i]
+
+    if (entryId !== undefined) {
+      const blockId = state.prune.messages.activeByAnchorMessageId.get(entryId)
+      if (blockId !== undefined) {
+        const block = state.prune.messages.blocksById.get(blockId)
+        if (block?.active === true && typeof block.summary === "string" && block.summary.length > 0) {
+          result.push(makeCompressionSummaryMessage(block))
+        }
+      }
+    }
+
+    if (entryId !== undefined) {
+      const pruneEntry = state.prune.messages.byMessageId.get(entryId)
+      if (pruneEntry !== undefined && pruneEntry.activeBlockIds.length > 0) {
+        continue
+      }
+    }
+
+    result.push(message)
+  }
+
+  messages.length = 0
+  messages.push(...result)
+}
+
+// ---------------------------------------------------------------------------
+// Orchestrator
+// ---------------------------------------------------------------------------
+
+function copyMessages(messages: AgentMessage[]): AgentMessage[] {
+  return messages.map((message) => ({ ...message }))
+}
+
+/**
+ * Prune a deep-copy of the context messages: apply compressed ranges, then
+ * prune marked tool outputs, then clear stale error details. Non-mutating with
+ * respect to the caller's array; never throws — on any error the original
+ * `messages` are returned unchanged.
+ */
+export function prune(
+  messages: AgentMessage[],
+  state: SessionState,
+  config: ResolvedConfig,
+  ctx?: ExtensionContext
+): AgentMessage[] {
+  try {
+    const result = copyMessages(messages)
+    applyCompressedRanges(result, state, ctx)
+    pruneToolOutputs(result, state, config)
+    pruneToolErrors(result, state)
+    return result
+  } catch {
+    return messages
+  }
+}
