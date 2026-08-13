@@ -2,6 +2,7 @@ import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-a
 import { Effect, Option } from "effect"
 import { dcpCompressHandler } from "./commands/dcp-command.js"
 import { dcpPanelHandler } from "./commands/dcp-tui.js"
+import { systemPromptHandler } from "./commands/system-prompt.js"
 import { createCompressTool } from "./compress/compress.js"
 import { registerNotificationRenderer } from "./compress/notification.js"
 import { defaultConfig, loadConfig, type ResolvedConfig } from "./core/config.js"
@@ -216,6 +217,13 @@ export default async function (pi: ExtensionAPI): Promise<void> {
         getState: () => dcpState.get(),
         saveState
       })
+    }
+  })
+
+  pi.registerCommand("system-prompt", {
+    description: "Show the current system prompt and tool definitions",
+    async handler(args, ctx) {
+      await systemPromptHandler(pi, args, ctx)
     }
   })
 }

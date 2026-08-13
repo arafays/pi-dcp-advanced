@@ -1,23 +1,44 @@
 {
   "name": "pi-dcp",
   "version": "1.0.0",
-  "description": "",
-  "keywords": [],
-  "license": "ISC",
-  "author": "",
+  "description": "Dynamic Context Pruning (DCP) for Pi — automatic deduplication, error purging, superseded-write pruning, and range-based compression that keep the agent context window sharp.",
+  "keywords": [
+    "pi-package",
+    "pi",
+    "pi-extension",
+    "context-pruning",
+    "context-management",
+    "compression",
+    "effect"
+  ],
+  "license": "MIT",
+  "author": "arafays <me@arafays.com>",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/arafays/pi-dcp-advanced.git"
+  },
   "type": "module",
   "main": "src/main.ts",
+  "files": [
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
   "pi": {
     "extensions": [
       "./src/main.ts"
     ]
   },
   "scripts": {
-    "test": "aube exec vitest run",
-    "prepare": "aube exec effect-tsgo patch"
+    "test": "aube exec vitest run"
   },
   "dependencies": {
     "effect": "^4.0.0-rc.108"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-ai": "*",
+    "@earendil-works/pi-coding-agent": "*",
+    "@earendil-works/pi-tui": "*"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.8",
