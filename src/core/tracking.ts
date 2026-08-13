@@ -8,16 +8,16 @@ import { Effect } from "effect"
 import { attachCompressionDuration, type DcpStateService, type ToolParameterEntry, type ToolStatus } from "./state.js"
 
 // ---------------------------------------------------------------------------
-// Tool-call tracking (WP3)
+// Tool-call tracking
 //
 // Event-driven handlers that keep DcpState.toolParameters / toolIdList /
 // currentTurn in sync, plus compress-tool timing. Each handler is a pure Effect
 // over the DcpState service (Ref-backed), so it is trivially testable with
 // DcpStateLive.
 //
-// tokenCount is intentionally left undefined: the port does not add a tokenizer
-// dependency, and WP8 nudge thresholds use ctx.getContextUsage() rather than
-// these per-tool counts. WP3 therefore records tool/parameters/status/turn only.
+// tokenCount is intentionally left undefined: we do not add a tokenizer
+// dependency, and nudge thresholds use ctx.getContextUsage() rather than
+// these per-tool counts. We therefore record tool/parameters/status/turn only.
 // ---------------------------------------------------------------------------
 
 /**
@@ -103,14 +103,14 @@ export const onToolExecutionStart = Effect.fn("Tracking.onToolExecutionStart")(f
 })
 
 /**
- * Advance the turn counter on each tool execution end (PLAN's simplest turn
+ * Advance the turn counter on each tool execution end (simplest turn
  * boundary), and — for the compress tool — finalize its execution duration:
  *
  *   1. compute durationMs from the recorded start (defensive: 0 if no start);
  *   2. apply it immediately to any already-created CompressionBlock whose
  *      compressCallId matches;
  *   3. otherwise record a pending duration in pendingByCallId for later
- *      reconciliation (WP6/WP11), since the block is normally created after the
+ *      reconciliation, since the block is normally created after the
  *      compress call has returned its summary.
  */
 export const onToolExecutionEnd = Effect.fn("Tracking.onToolExecutionEnd")(function* (

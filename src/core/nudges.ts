@@ -7,7 +7,7 @@ import type { ContextLimit, ResolvedConfig } from "./config.js"
 import type { SessionState } from "./state.js"
 
 // ---------------------------------------------------------------------------
-// Message type (mirrors src/prune.ts — AgentMessage is not re-exported from the
+// Message type (mirrors prune.ts — AgentMessage is not re-exported from the
 // pi-coding-agent root, so derive it from the ContextEvent contract).
 // ---------------------------------------------------------------------------
 
@@ -16,7 +16,7 @@ export type AgentMessage = ContextEvent["messages"][number]
 type TextContentBlock = { type: "text"; text: string }
 
 // ---------------------------------------------------------------------------
-// Nudge prompt constants (verbatim from lib/prompts/{context-limit,turn,iteration}-nudge.ts)
+// Nudge prompt constants
 // ---------------------------------------------------------------------------
 
 export const CONTEXT_LIMIT_NUDGE = `<dcp-system-reminder>
@@ -57,7 +57,7 @@ If there is a closed portion that is unlikely to be referenced immediately (for 
 `
 
 // ---------------------------------------------------------------------------
-// Guidance builders (ported from lib/prompts/extensions/nudge.ts — range mode)
+// Guidance builders (range mode)
 // ---------------------------------------------------------------------------
 
 /** List the active compressed blocks (`bN`) so the model can reference them. */
@@ -90,7 +90,7 @@ export function appendGuidanceToDcpTag(nudgeText: string, guidance: string): str
 }
 
 // ---------------------------------------------------------------------------
-// Helpers (ported from lib/messages/inject/utils.ts — range mode, entry-id keys)
+// Helpers (range mode, entry-id keys)
 // ---------------------------------------------------------------------------
 
 function getNudgeFrequency(config: ResolvedConfig): number {
@@ -301,7 +301,7 @@ function applyAnchoredNudges(
 }
 
 // ---------------------------------------------------------------------------
-// Entry-id pairing (mirrors src/prune.ts applyCompressedRanges)
+// Entry-id pairing (mirrors prune.ts applyCompressedRanges)
 // ---------------------------------------------------------------------------
 
 function buildEntryIds(ctx: ExtensionContext, messages: AgentMessage[]): string[] | null {
@@ -319,13 +319,13 @@ function buildEntryIds(ctx: ExtensionContext, messages: AgentMessage[]): string[
 }
 
 // ---------------------------------------------------------------------------
-// Nudge injection (ported from lib/messages/inject/inject.ts injectCompressNudges)
+// Nudge injection
 // ---------------------------------------------------------------------------
 
 /**
  * Inject compress nudges into the context `messages` copy. Anchors are keyed on
  * branch ENTRY ids (Pi messages carry no stable id). `state` is mutated (anchor
- * Sets); persistence is the caller's (WP11) responsibility. Range mode only —
+ * Sets); persistence is the caller's responsibility. Range mode only —
  * message-mode compress is out of scope. Never throws.
  */
 export function injectNudges(

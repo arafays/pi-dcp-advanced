@@ -124,6 +124,108 @@ describe("prune", () => {
     expect(asToolResult(result[0]).content).toEqual([{ type: "text", text: "important content" }])
   })
 
+  it("drops a superseded write toolCall+result pair atomically", () => {
+    const state = createEmptySessionState()
+    state.prune.tools.set("write-1", 100)
+    state.toolParameters.set("write-1", {
+      tool: "write",
+      parameters: { path: "a.ts", content: "v1" },
+      status: "completed",
+      turn: 0
+    })
+
+    const assistant: AgentMessage = {
+      role: "assistant",
+      content: [{ type: "toolCall", id: "write-1", name: "write", arguments: { path: "a.ts", content: "v1" } }],
+      api: "anthropic",
+      provider: "anthropic",
+      model: "claude",
+      usage: {
+        input: 0,
+        output: 0,
+        cacheRead: 0,
+        cacheWrite: 0,
+        totalTokens: 0,
+        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 }
+      },
+      stopReason: "stop",
+      timestamp: 0
+    }
+    const messages: AgentMessage[] = [assistant, toolResult("write-1", "write", "Successfully wrote 2 bytes to a.ts")]
+
+    const result = prune(messages, state, defaultConfig)
+
+    // Both the assistant toolCall and its toolResult are dropped — no orphans.
+    expect(result).toHaveLength(0)
+  })
+
+  it("keeps the most recent write when an earlier one is superseded", () => {
+    const state = createEmptySessionState()
+    state.prune.tools.set("write-1", 100)
+    state.toolParameters.set("write-1", {
+      tool: "write",
+      parameters: { path: "a.ts", content: "v1" },
+      status: "completed",
+      turn: 0
+    })
+    state.toolParameters.set("write-2", {
+      tool: "write",
+      parameters: { path: "a.ts", content: "v2" },
+      status: "completed",
+      turn: 1
+    })
+
+    const assistant1: AgentMessage = {
+      role: "assistant",
+      content: [{ type: "toolCall", id: "write-1", name: "write", arguments: { path: "a.ts", content: "v1" } }],
+      api: "anthropic",
+      provider: "anthropic",
+      model: "claude",
+      usage: {
+        input: 0,
+        output: 0,
+        cacheRead: 0,
+        cacheWrite: 0,
+        totalTokens: 0,
+        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 }
+      },
+      stopReason: "stop",
+      timestamp: 0
+    }
+    const assistant2: AgentMessage = {
+      ...assistant1,
+      content: [{ type: "toolCall", id: "write-2", name: "write", arguments: { path: "a.ts", content: "v2" } }]
+    }
+    const messages: AgentMessage[] = [
+      assistant1,
+      toolResult("write-1", "write", "Successfully wrote 2 bytes to a.ts"),
+      assistant2,
+      toolResult("write-2", "write", "Successfully wrote 2 bytes to a.ts")
+    ]
+
+    const result = prune(messages, state, defaultConfig)
+
+    // The superseded pair (write-1) is dropped; write-2 survives intact.
+    expect(result).toHaveLength(2)
+    expect((result[0] as AgentMessage).role).toBe("assistant")
+    expect(asToolResult(result[1]).toolCallId).toBe("write-2")
+  })
+
+  it("does not drop a marked but errored write result", () => {
+    const state = createEmptySessionState()
+    state.prune.tools.set("write-1", 100)
+    state.toolParameters.set("write-1", {
+      tool: "write",
+      parameters: { path: "a.ts", content: "v1" },
+      status: "error",
+      turn: 0
+    })
+
+    const result = prune([toolResult("write-1", "write", "boom", { isError: true })], state, defaultConfig)
+
+    expect(asToolResult(result[0]).content).toEqual([{ type: "text", text: "boom" }])
+  })
+
   it("leaves protected-file outputs untouched", () => {
     const state = createEmptySessionState()
     state.prune.tools.set("read-1", 100)
@@ -142,7 +244,7 @@ describe("prune", () => {
 
   it("clears details for errored tool results marked for pruning (mark-then-apply)", () => {
     const state = createEmptySessionState()
-    // Marked by WP5 purgeErrors (errored + past N turns). pruneToolErrors is a
+    // Marked by purgeErrors (errored + past N turns). pruneToolErrors is a
     // pure applier that reads state.prune.tools.
     state.prune.tools.set("bash-1", 80)
     const messages: AgentMessage[] = [toolResult("bash-1", "bash", "boom", { isError: true, details: { argv: "rm" } })]
@@ -154,7 +256,7 @@ describe("prune", () => {
 
   it("keeps details for errored tools that were not marked (protected / not old enough)", () => {
     const state = createEmptySessionState()
-    // No mark: WP5 purgeErrors skipped it (protected tool, or below turn threshold).
+    // No mark: purgeErrors skipped it (protected tool, or below turn threshold).
     const messages: AgentMessage[] = [toolResult("bash-1", "bash", "boom", { isError: true, details: { argv: "rm" } })]
 
     const result = prune(messages, state, defaultConfig)
@@ -182,7 +284,7 @@ describe("prune", () => {
       }
     }
 
-    // WP5 purgeErrors would not mark a protected tool, so state.prune.tools is empty.
+    // purgeErrors would not mark a protected tool, so state.prune.tools is empty.
     const result = prune(
       [toolResult("write-1", "write", "boom", { isError: true, details: { filePath: "x" } })],
       state,

@@ -4,8 +4,7 @@ import type { ResolvedConfig } from "./config.js"
 import type { SessionState } from "./state.js"
 
 // ---------------------------------------------------------------------------
-// DCP system-prompt block (ported from ../lib/prompts/system.ts and
-// ../lib/prompts/extensions/system.ts). The SYSTEM_PROMPT text is the
+// DCP system-prompt block. The SYSTEM_PROMPT text is the
 // compress-range usage instructions (when/what to compress); the extensions
 // carry the protected-tools list and the manual-mode reminder.
 // ---------------------------------------------------------------------------

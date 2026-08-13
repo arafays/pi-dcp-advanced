@@ -10,29 +10,29 @@ import { prune } from "./core/prune.js"
 import { createEmptySessionState, loadState, makeDcpState, type SessionState, saveState } from "./core/state.js"
 import { onBeforeAgentStart } from "./core/system-prompt.js"
 import { onToolCall, onToolExecutionEnd, onToolExecutionStart, onToolResult } from "./core/tracking.js"
-import { deduplicate, purgeErrors } from "./strategies/strategies.js"
+import { deduplicate, purgeErrors, supersededWrites } from "./strategies/strategies.js"
 
 // ---------------------------------------------------------------------------
-// WP11 — context-handler integration.
+// Context-handler integration.
 //
-// Wires WP1-WP10 into the Pi extension factory:
-//   - config     (WP1): loadConfig cascade, degrade to defaults on failure.
-//   - state      (WP2): Ref-backed DcpState service + saveState/loadState.
-//   - tracking   (WP3): tool_call/tool_result/tool_execution_{start,end} hooks.
-//   - prune      (WP4): prune(messages, state, config, ctx) — mark-then-apply.
-//   - strategies (WP5): deduplicate + purgeErrors — seed the prune map.
-//   - compress   (WP6): the `compress` range tool.
-//   - system-prompt (WP7): before_agent_start injection.
-//   - nudges     (WP8): injectNudges after pruning.
-//   - TUI/command (WP9/WP10): /dcp panel + /dcp-compress trigger.
+// Wires all DCP components into the Pi extension factory:
+//   - config: loadConfig cascade, degrade to defaults on failure.
+//   - state: Ref-backed DcpState service + saveState/loadState.
+//   - tracking: tool_call/tool_result/tool_execution_{start,end} hooks.
+//   - prune: prune(messages, state, config, ctx) — mark-then-apply.
+//   - strategies: deduplicate + purgeErrors — seed the prune map.
+//   - compress: the `compress` range tool.
+//   - system-prompt: before_agent_start injection.
+//   - nudges: injectNudges after pruning.
+//   - TUI/command: /dcp panel + /dcp-compress trigger.
 //
 // The factory is async (ExtensionFactory allows `Promise<void>`), so config is
 // resolved once at load time and captured in the closure — no lazy config
 // promise needed in the hot context handler.
 //
-// Error policy (PLAN WP11): handlers never throw. On error they notify (when a
-// UI is available) and return the unchanged result (context -> original
-// messages; before_agent_start -> {}; tool_* -> void).
+// Error policy: handlers never throw. On error they notify (when a UI is
+// available) and return the unchanged result (context -> original messages;
+// before_agent_start -> {}; tool_* -> void).
 // ---------------------------------------------------------------------------
 
 /** Resolve DCP config from the cascade, degrading to defaults on any failure. */
@@ -64,7 +64,7 @@ export default async function (pi: ExtensionAPI): Promise<void> {
   const dcpState = await Effect.runPromise(makeDcpState(createEmptySessionState()))
   const getState = (): SessionState => Effect.runSync(dcpState.get())
 
-  // --- session lifecycle (WP2 persistence) ----------------------------------
+  // --- session lifecycle (state persistence) -------------------------------
   pi.on("session_start", (_event, ctx) => {
     try {
       const sessionId = ctx.sessionManager.getSessionId()
@@ -87,7 +87,7 @@ export default async function (pi: ExtensionAPI): Promise<void> {
     }
   })
 
-  // --- tool-call tracking (WP3) ---------------------------------------------
+  // --- tool-call tracking ----------------------------------------------------
   pi.on("tool_call", (event, ctx) => {
     try {
       Effect.runSync(onToolCall(event, dcpState))
@@ -120,13 +120,13 @@ export default async function (pi: ExtensionAPI): Promise<void> {
     }
   })
 
-  // --- system-prompt injection (WP7) ----------------------------------------
+  // --- system-prompt injection ----------------------------------------------
   pi.on(
     "before_agent_start",
     onBeforeAgentStart(pi, config, () => dcpState.get())
   )
 
-  // --- the context prune pipeline (WP11, PLAN order) -------------------------
+  // --- the context prune pipeline --------------------------------------------
   pi.on("context", (event, ctx) => {
     try {
       if (!config.enabled) {
@@ -148,6 +148,7 @@ export default async function (pi: ExtensionAPI): Promise<void> {
       //    in place — the Ref-held object — so no explicit update is required.
       deduplicate(state, config)
       purgeErrors(state, config)
+      supersededWrites(state, config)
 
       // 2. Apply the marks to a deep copy of the context messages.
       const pruned = prune(event.messages, state, config, ctx)
@@ -160,8 +161,7 @@ export default async function (pi: ExtensionAPI): Promise<void> {
       //    trigger user turn (sentinel `<compress triggered manually>`) is
       //    observed, restore the prior manualMode and clear the pending flag.
       //    Run after nudges so the compress turn itself stays nudge-free.
-      //    Range-mode, in-place-rewrite-free port of the source
-      //    `applyPendingManualTrigger` (lib/commands/manual.ts:93).
+      //    Range-mode port of `applyPendingManualTrigger` semantics.
       const pending = state.pendingManualTrigger
       if (pending !== null) {
         const sentinel = "<compress triggered manually>"
@@ -189,10 +189,10 @@ export default async function (pi: ExtensionAPI): Promise<void> {
     }
   })
 
-  // --- compress range tool (WP6) --------------------------------------------
+  // --- compress range tool ------------------------------------------------
   pi.registerTool(createCompressTool({ config, getState, pi }))
 
-  // --- commands (WP9 / WP10) ------------------------------------------------
+  // --- commands ------------------------------------------------------------
   pi.registerCommand("dcp", {
     description: "Dynamic Context Pruning controls",
     async handler(args, ctx) {

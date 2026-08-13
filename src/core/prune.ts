@@ -29,7 +29,7 @@ export const PRUNED_TOOL_ERROR_REPLACEMENT = "[input removed due to failed tool 
 export const PRUNED_QUESTION_INPUT_REPLACEMENT = "[questions removed - see output for user's answers]"
 
 // ---------------------------------------------------------------------------
-// Protected-pattern matching (ported from ../opencode-dynamic-context-pruning/lib/protected-patterns.ts)
+// Protected-pattern matching
 // ---------------------------------------------------------------------------
 
 function normalizePath(input: string): string {
@@ -158,18 +158,11 @@ export function pruneToolOutputs(messages: AgentMessage[], state: SessionState, 
 }
 
 /**
- * Clear the input-bearing `details` of errored tool results once they are older
- * than `config.strategies.purgeErrors.turns` turns. Protected tools (config.
- * strategies.purgeErrors.protectedTools) and protected-file args are skipped.
- */
-/**
  * Mark-then-apply: clear the verbose `details` of errored tool results that
- * were marked for pruning (by WP5 `purgeErrors` / `deduplicate`, which write
- * `state.prune.tools`). Mirrors `lib/messages/prune.ts:128` which reads
- * `state.prune.tools.has(callID)` + `status === "error"`. Protected-tool and
- * turn-threshold gating already happened at mark time, so this is a pure
- * applier. In Pi the verbose error payload lives on `ToolResultMessage.details`
- * (the equivalent of the OpenCode tool-part's string inputs).
+ * were marked for pruning (by `purgeErrors` / `deduplicate`, which write
+ * `state.prune.tools`). Protected-tool and turn-threshold gating already
+ * happened at mark time, so this is a pure applier. In Pi the verbose error
+ * payload lives on `ToolResultMessage.details`.
  */
 export function pruneToolErrors(messages: AgentMessage[], state: SessionState): void {
   if (state.prune.tools.size === 0) return
@@ -180,6 +173,67 @@ export function pruneToolErrors(messages: AgentMessage[], state: SessionState): 
     if (!state.prune.tools.has(message.toolCallId)) continue
 
     delete message.details
+  }
+}
+
+const FILE_MUTATION_TOOLS = new Set(["write", "edit"])
+
+/**
+ * Whether a marked tool-call id should have its WHOLE toolCall+result pair
+ * dropped by `dropSupersededWrites`. Only completed write/edit calls qualify.
+ *
+ * The `status === "completed"` gate is what scopes the applier: `supersededWrites`
+ * only marks completed write/edit calls, and `purgeErrors` only marks errored
+ * ones (which stay untouched here — their error text is signal). `deduplicate`
+ * may also mark a completed write/edit with identical content; dropping those is
+ * still correct (an identical later write genuinely supersedes the earlier one),
+ * so no separate mark set is needed.
+ */
+function isSupersededFileWrite(id: string, state: SessionState): boolean {
+  if (!state.prune.tools.has(id)) return false
+  return state.toolParameters.get(id)?.status === "completed"
+}
+
+/**
+ * Drop superseded write/edit tool calls atomically: remove the assistant
+ * `toolCall` block AND its matching `toolResult` message together, so no
+ * orphaned `tool` role message (or assistant toolCall without a result)
+ * survives to the provider. The large payload lives in the assistant
+ * `toolCall.arguments` (`{ path, content }` / `{ path, edits[] }`), not the
+ * ~40-byte toolResult text — so a result-only placeholder would save nothing.
+ *
+ * Gating (protected tools, protected file patterns, enabled, manual mode) was
+ * already applied at mark time by the `supersededWrites` strategy; this is a
+ * pure applier over `state.prune.tools`.
+ */
+export function dropSupersededWrites(messages: AgentMessage[], state: SessionState): void {
+  if (state.prune.tools.size === 0) return
+
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const message = messages[i]
+    if (message === undefined) continue
+
+    if (message.role === "assistant" && Array.isArray(message.content)) {
+      const filtered = message.content.filter((block) => {
+        if (block.type !== "toolCall") return true
+        if (!FILE_MUTATION_TOOLS.has(block.name)) return true
+        return !isSupersededFileWrite(block.id, state)
+      })
+
+      if (filtered.length === 0) {
+        messages.splice(i, 1)
+      } else if (filtered.length !== message.content.length) {
+        message.content = filtered
+      }
+      continue
+    }
+
+    if (message.role === "toolResult") {
+      if (!FILE_MUTATION_TOOLS.has(message.toolName)) continue
+      if (isSupersededFileWrite(message.toolCallId, state)) {
+        messages.splice(i, 1)
+      }
+    }
   }
 }
 
@@ -297,6 +351,7 @@ export function prune(
   try {
     const result = copyMessages(messages)
     applyCompressedRanges(result, state, ctx)
+    dropSupersededWrites(result, state)
     pruneToolOutputs(result, state, config)
     pruneToolErrors(result, state)
     return result

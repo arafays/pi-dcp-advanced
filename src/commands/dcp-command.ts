@@ -4,23 +4,17 @@ import { buildCompressedBlockGuidance } from "../core/nudges.js"
 import type { PendingManualTrigger, SessionState } from "../core/state.js"
 
 // ---------------------------------------------------------------------------
-// /dcp-compress [focus] command (WP10)
+// /dcp-compress [focus] command
 //
-// Port of lib/commands/manual.ts handleManualTriggerCommand + the manual
-// trigger half of lib/hooks.ts (hooks.ts:236-244). In the OpenCode source the
-// command cannot send arbitrary user content, so it sets
-// `state.pendingManualTrigger` and then `applyPendingManualTrigger` REWRITES an
-// already-queued user message's text part to the trigger prompt on the next
-// context event. Pi has no safe equivalent of that in-place rewrite, so we
-// `pi.sendUserMessage(triggerPrompt)` DIRECTLY — it always triggers a turn and
-// drives the model to invoke the `compress` tool (registered by WP6).
+// Sends a manual compress trigger prompt directly to the model, which always
+// triggers a turn and drives the model to invoke the `compress` tool.
 //
-// `state.pendingManualTrigger` is still set for parity/state-tracking: WP11's
-// context handler restores `manualMode` to its prior value and clears the
-// pending flag once it observes the trigger was delivered (a user message
-// containing `<compress triggered manually>`). It is a live-only flag — not
-// part of `PersistedStateSchema` — so it does not survive /reload, which is
-// acceptable because the trigger is sent in the same command.
+// `state.pendingManualTrigger` is set for state-tracking: the context handler
+// restores `manualMode` to its prior value and clears the pending flag once it
+// observes the trigger was delivered (a user message containing
+// `<compress triggered manually>`). It is a live-only flag — not part of
+// `PersistedStateSchema` — so it does not survive /reload, which is acceptable
+// because the trigger is sent in the same command.
 // ---------------------------------------------------------------------------
 
 export const COMPRESS_TRIGGER_PROMPT = [
@@ -31,7 +25,7 @@ export const COMPRESS_TRIGGER_PROMPT = [
   "Return after compress with a brief explanation of what content was compressed."
 ].join("\n\n")
 
-/** Injected dependencies, wired by WP11 to the DcpState service + `saveState`. */
+/** Injected dependencies, wired to the DcpState service + `saveState`. */
 export interface DcpCompressDeps {
   readonly pi: ExtensionAPI
   readonly getState: () => Effect.Effect<SessionState>
@@ -40,8 +34,7 @@ export interface DcpCompressDeps {
 
 /**
  * Build the trigger prompt for a manual compress run. Range mode is the only
- * in-scope mode, so the active-compressed-block guidance is always appended
- * (mirrors the source's `mode === "message" ? "" : buildCompressedBlockGuidance`).
+ * in-scope mode, so the active-compressed-block guidance is always appended.
  */
 export function buildTriggerPrompt(state: SessionState, focus?: string): string {
   const sections = [COMPRESS_TRIGGER_PROMPT, buildCompressedBlockGuidance(state)]
@@ -72,8 +65,7 @@ export async function dcpCompressHandler(
     const state = Effect.runSync(deps.getState())
     const triggerPrompt = buildTriggerPrompt(state, focus)
 
-    // In-place mutation mirrors the source (hooks.ts:238-243): getState()
-    // returns the Ref-held object, so mutating it updates the DcpState service.
+    // In-place mutation of the Ref-held state object.
     const pendingManualTrigger: PendingManualTrigger = {
       sessionId: state.sessionId ?? "",
       prompt: triggerPrompt,

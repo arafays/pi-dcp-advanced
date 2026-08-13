@@ -1,7 +1,7 @@
 import { describe, expect, it } from "@effect/vitest"
 import { defaultConfig, type ResolvedConfig } from "../core/config.js"
 import { createEmptySessionState, type SessionState, type ToolParameterEntry } from "../core/state.js"
-import { deduplicate, purgeErrors } from "./strategies.js"
+import { deduplicate, purgeErrors, supersededWrites } from "./strategies.js"
 
 function entry(
   tool: string,
@@ -118,9 +118,135 @@ describe("deduplicate", () => {
 
     deduplicate(state, config)
     purgeErrors(state, config)
+    supersededWrites(state, config)
 
     expect(state.prune.tools.size).toBe(0)
     expect(state.stats.totalPruneTokens).toBe(0)
+  })
+})
+
+describe("supersededWrites", () => {
+  it("drops earlier write/edit calls to the same path, keeping the most recent", () => {
+    const state = seedState([
+      ["w1", entry("write", { path: "a.ts", content: "v1" }, "completed", 0)],
+      ["w2", entry("write", { path: "a.ts", content: "v2" }, "completed", 1)]
+    ])
+
+    supersededWrites(state, defaultConfig)
+
+    expect(pruneIds(state)).toEqual(["w1"])
+    expect(state.prune.tools.has("w2")).toBe(false)
+    expect(state.prune.tools.get("w1")).toBe(100)
+    expect(state.stats.totalPruneTokens).toBe(100)
+  })
+
+  it("an edit supersedes an earlier write to the same path (grouped by path)", () => {
+    const state = seedState([
+      ["w1", entry("write", { path: "a.ts", content: "v1" }, "completed", 0)],
+      ["e1", entry("edit", { path: "a.ts", edits: [] }, "completed", 1)]
+    ])
+
+    supersededWrites(state, defaultConfig)
+
+    expect(pruneIds(state)).toEqual(["w1"])
+    expect(state.prune.tools.has("e1")).toBe(false)
+  })
+
+  it("ignores writes to different paths (no false supersession)", () => {
+    const state = seedState([
+      ["w1", entry("write", { path: "a.ts", content: "v1" }, "completed", 0)],
+      ["w2", entry("write", { path: "b.ts", content: "v2" }, "completed", 1)]
+    ])
+
+    supersededWrites(state, defaultConfig)
+
+    expect(state.prune.tools.size).toBe(0)
+    expect(state.stats.totalPruneTokens).toBe(0)
+  })
+
+  it("skips non-write/edit tools even when they share a path argument", () => {
+    const state = seedState([
+      ["r1", entry("read", { path: "a.ts" }, "completed", 0)],
+      ["r2", entry("read", { path: "a.ts" }, "completed", 1)]
+    ])
+
+    supersededWrites(state, defaultConfig)
+
+    expect(state.prune.tools.size).toBe(0)
+  })
+
+  it("skips errored writes (error text is signal; purgeErrors owns them)", () => {
+    const state = seedState([
+      ["w1", entry("write", { path: "a.ts", content: "v1" }, "error", 0)],
+      ["w2", entry("write", { path: "a.ts", content: "v2" }, "completed", 1)]
+    ])
+
+    supersededWrites(state, defaultConfig)
+
+    expect(state.prune.tools.size).toBe(0)
+  })
+
+  it("skips protected tools", () => {
+    const state = seedState([
+      ["w1", entry("write", { path: "a.ts", content: "v1" }, "completed", 0)],
+      ["w2", entry("write", { path: "a.ts", content: "v2" }, "completed", 1)]
+    ])
+    const config: ResolvedConfig = {
+      ...defaultConfig,
+      strategies: {
+        ...defaultConfig.strategies,
+        supersededWrites: { ...defaultConfig.strategies.supersededWrites, protectedTools: ["write"] }
+      }
+    }
+
+    supersededWrites(state, config)
+
+    expect(state.prune.tools.size).toBe(0)
+  })
+
+  it("skips tools whose file paths are protected", () => {
+    const state = seedState([
+      ["w1", entry("write", { path: "src/secret/notes.md", content: "v1" }, "completed", 0)],
+      ["w2", entry("write", { path: "src/secret/notes.md", content: "v2" }, "completed", 1)]
+    ])
+    const config: ResolvedConfig = { ...defaultConfig, protectedFilePatterns: ["**/secret/**"] }
+
+    supersededWrites(state, config)
+
+    expect(state.prune.tools.size).toBe(0)
+  })
+
+  it("excludes ids that are already pruned (no double-processing)", () => {
+    const state = seedState([
+      ["w1", entry("write", { path: "a.ts", content: "v1" }, "completed", 0)],
+      ["w2", entry("write", { path: "a.ts", content: "v2" }, "completed", 1)],
+      ["w3", entry("write", { path: "a.ts", content: "v3" }, "completed", 2)]
+    ])
+    state.prune.tools.set("w1", 100)
+
+    supersededWrites(state, defaultConfig)
+
+    // w1 already pruned; w2 pruned as superseded by w3 (w3 kept).
+    expect(pruneIds(state)).toEqual(["w1", "w2"])
+    expect(state.prune.tools.has("w3")).toBe(false)
+  })
+
+  it("respects the enabled flag", () => {
+    const state = seedState([
+      ["w1", entry("write", { path: "a.ts", content: "v1" }, "completed", 0)],
+      ["w2", entry("write", { path: "a.ts", content: "v2" }, "completed", 1)]
+    ])
+    const config: ResolvedConfig = {
+      ...defaultConfig,
+      strategies: {
+        ...defaultConfig.strategies,
+        supersededWrites: { ...defaultConfig.strategies.supersededWrites, enabled: false }
+      }
+    }
+
+    supersededWrites(state, config)
+
+    expect(state.prune.tools.size).toBe(0)
   })
 })
 

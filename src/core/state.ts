@@ -4,8 +4,7 @@ import { Context, Effect, Layer, Option, Ref, Schema } from "effect"
 // ---------------------------------------------------------------------------
 // Types
 //
-// Ported from ../opencode-dynamic-context-pruning/lib/state/types.ts and
-// ../lib/compress/state.ts, re-keyed to Pi stable identities:
+// DCP session state, re-keyed to Pi stable identities:
 //   - tool outputs / prune map keyed by `toolCallId` (string)
 //   - compression blocks anchored on branch `entry` ids (string)
 // ---------------------------------------------------------------------------
@@ -129,7 +128,7 @@ export interface SessionState {
 }
 
 // ---------------------------------------------------------------------------
-// Compression state input types (ported from ../lib/compress/types.ts)
+// Compression state input types
 // ---------------------------------------------------------------------------
 
 export interface BoundaryReference {
@@ -249,7 +248,7 @@ export const PersistedStateSchema = Schema.Struct({
 export type PersistedState = Schema.Schema.Type<typeof PersistedStateSchema>
 
 // ---------------------------------------------------------------------------
-// Pure state construction / allocation (ported from ../lib/compress/state.ts)
+// Pure state construction / allocation
 // ---------------------------------------------------------------------------
 
 export function createPruneMessagesState(): PruneMessagesState {
@@ -332,7 +331,7 @@ export function attachCompressionDuration(
 /**
  * Apply a compression block to the prune state, deactivating any consumed
  * blocks (the "older summary nested inside newer" merge) and updating the
- * active/anchor maps. Ported verbatim from the source's applyCompressionState.
+ * active/anchor maps.
  */
 export function applyCompressionState(
   state: SessionState,

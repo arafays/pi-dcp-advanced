@@ -158,12 +158,12 @@ export interface CompressToolDetails {
   readonly error?: string
 }
 
-/** Dependencies the tool needs to read/persist DCP state (WP11 wires the DcpState service here). */
+/** Dependencies the tool needs to read/persist DCP state. */
 export interface CompressToolDeps {
   readonly config: ResolvedConfig
   /** Returns the live mutable SessionState. */
   readonly getState: () => SessionState
-  /** Persists the current state (WP11 wires this to `saveState(pi, state)` via the DcpState service). */
+  /** Persists the current state via `saveState(pi, state)`. */
   readonly pi: ExtensionAPI
 }
 
@@ -321,7 +321,7 @@ function resolveSelection(
       messageSeen.add(messageId)
       messageIds.push(messageId)
     }
-    // No tokenizer in the port: per-message token counts are 0 (WP8 uses getContextUsage).
+    // No tokenizer: per-message token counts are 0 (nudge thresholds use getContextUsage).
     messageTokenById.set(messageId, 0)
 
     if (message.role === "toolResult") {
@@ -378,7 +378,7 @@ function resolveAnchorMessageId(startReference: BoundaryReference): string {
   return startReference.messageId
 }
 
-/** Build the search context from Pi's compaction-aware context entries (mirrors src/prune.ts). */
+/** Build the search context from Pi's compaction-aware context entries. */
 function buildSearchContext(ctx: ExtensionContext, state: SessionState): SearchContext {
   const rawMessages: SessionEntry[] = []
   const rawMessagesById = new Map<string, SessionEntry>()
@@ -417,7 +417,7 @@ function resolveCompressMessageId(ctx: ExtensionContext, toolCallId: string): st
 }
 
 // ---------------------------------------------------------------------------
-// Range utilities (ported from lib/compress/range-utils.ts)
+// Range utilities
 // ---------------------------------------------------------------------------
 
 const BLOCK_PLACEHOLDER_REGEX = /\(b(\d+)\)|\{block_(\d+)\}/gi
@@ -677,7 +677,7 @@ function injectBoundarySummary(
 }
 
 // ---------------------------------------------------------------------------
-// Summary wrapping (matches the source's wrapCompressedSummary)
+// Summary wrapping
 // ---------------------------------------------------------------------------
 
 export function wrapCompressedSummary(blockId: number, summary: string): string {

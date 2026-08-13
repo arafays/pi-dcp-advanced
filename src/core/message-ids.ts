@@ -8,7 +8,7 @@ import type { ResolvedConfig } from "./config.js"
 import type { SessionState } from "./state.js"
 
 // ---------------------------------------------------------------------------
-// Message type (mirrors src/prune.ts and src/nudges.ts — AgentMessage is not
+// Message type (mirrors prune.ts and nudges.ts — AgentMessage is not
 // re-exported from the pi-coding-agent root, so derive it from the ContextEvent
 // contract).
 // ---------------------------------------------------------------------------
@@ -18,8 +18,7 @@ export type AgentMessage = ContextEvent["messages"][number]
 type TextContentBlock = { type: "text"; text: string }
 
 /**
- * Roles that carry real conversation content and get an `mNNNN` ref. Unlike
- * OpenCode (where tool results are `tool` parts of the assistant message), Pi
+ * Roles that carry real conversation content and get an `mNNNN` ref. Pi
  * models tool results and bash executions as separate entries, so they must be
  * tagged too — otherwise the model cannot reference a tool result as a
  * compression boundary and produces orphaned `tool` messages.
@@ -27,7 +26,7 @@ type TextContentBlock = { type: "text"; text: string }
 const COMPRESSIBLE_ROLES = new Set<string>(["user", "assistant", "toolResult", "bashExecution"])
 
 // ---------------------------------------------------------------------------
-// Ref formatting / parsing (ported verbatim from lib/message-ids.ts)
+// Ref formatting / parsing
 //
 // Message refs are the `mNNNN` aliases the model uses to reference raw
 // conversation messages; block refs stay `bN`. Refs are stable across turns:
@@ -176,7 +175,7 @@ export function injectMessageIds(
   entries: SessionEntry[]
 ): void {
   if ((state.compressPermission ?? config.compress.permission) === "deny") return
-  // Defensive length guard (mirrors src/prune.ts applyCompressedRanges): if the
+  // Defensive length guard (mirrors prune.ts applyCompressedRanges): if the
   // entry<->message alignment drifted (Pi internals changed), bail rather than
   // mis-assign refs and tag the wrong message.
   if (entries.length !== messages.length) return
@@ -277,8 +276,8 @@ export function injectMessageIds(
 }
 
 /**
- * The exact context-entry projection used by src/prune.ts applyCompressedRanges
- * and src/nudges.ts: the compaction-aware branch entry list, filtered to the
+ * The exact context-entry projection used by prune.ts applyCompressedRanges
+ * and nudges.ts: the compaction-aware branch entry list, filtered to the
  * entries that produce a context message (each yields exactly one AgentMessage).
  */
 export function getMessageEntries(ctx: ExtensionContext): SessionEntry[] {

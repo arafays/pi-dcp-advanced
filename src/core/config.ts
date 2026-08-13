@@ -44,6 +44,12 @@ export const PurgeErrorsSchema = Schema.Struct({
 })
 export interface PurgeErrors extends Schema.Schema.Type<typeof PurgeErrorsSchema> {}
 
+export const SupersededWritesSchema = Schema.Struct({
+  enabled: Schema.Boolean,
+  protectedTools: Schema.Array(Schema.String)
+})
+export interface SupersededWrites extends Schema.Schema.Type<typeof SupersededWritesSchema> {}
+
 export const CommandsSchema = Schema.Struct({
   enabled: Schema.Boolean,
   protectedTools: Schema.Array(Schema.String)
@@ -80,7 +86,8 @@ export interface CompressConfig extends Schema.Schema.Type<typeof CompressConfig
 
 export const StrategiesSchema = Schema.Struct({
   deduplication: DeduplicationSchema,
-  purgeErrors: PurgeErrorsSchema
+  purgeErrors: PurgeErrorsSchema,
+  supersededWrites: SupersededWritesSchema
 })
 export interface Strategies extends Schema.Schema.Type<typeof StrategiesSchema> {}
 
@@ -101,7 +108,7 @@ export const ConfigSchema = Schema.Struct({
 export type ResolvedConfig = Schema.Schema.Type<typeof ConfigSchema>
 
 // ---------------------------------------------------------------------------
-// Defaults (ported from `lib/config.ts` `defaultConfig`, OpenCode-only fields dropped)
+// Defaults
 // ---------------------------------------------------------------------------
 
 const DEFAULT_PROTECTED_TOOLS = [
@@ -142,7 +149,8 @@ export const defaultConfig: ResolvedConfig = {
   },
   strategies: {
     deduplication: { enabled: true, protectedTools: [] },
-    purgeErrors: { enabled: true, turns: 4, protectedTools: [] }
+    purgeErrors: { enabled: true, turns: 4, protectedTools: [] },
+    supersededWrites: { enabled: true, protectedTools: [] }
   }
 }
 
@@ -242,5 +250,5 @@ const toService = (data: ResolvedConfig): ConfigService => ({
   getManualMode: () => data.manualMode
 })
 
-/** Static default-config service. WP11 overlays `loadConfig`'s resolved value. */
+/** Static default-config service. The factory overlays `loadConfig`'s resolved value. */
 export const ConfigLive = Layer.succeed(Config, toService(defaultConfig))

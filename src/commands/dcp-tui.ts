@@ -12,16 +12,13 @@ import type { ResolvedConfig } from "../core/config.js"
 import type { DcpStateService, SessionState } from "../core/state.js"
 
 // ---------------------------------------------------------------------------
-// WP9 — /dcp TUI panel
+// /dcp TUI panel
 //
-// Ports the session-overview/statistics portion of DCP's TUI panel
-// (SRC/lib/tui/* + SRC/lib/commands/{context,stats}.ts) onto Pi's
-// `ctx.ui.custom` imperative component API. The OpenCode source renders with
-// Solid/OpenTUI tsx (SRC/lib/tui/ui.tsx); Pi uses pi-tui imperative components
-// (see PI/examples/extensions/summarize.ts, which this mirrors).
+// Session-overview/statistics panel built on Pi's `ctx.ui.custom` imperative
+// component API using pi-tui imperative components.
 //
-// The command itself is NOT registered here — WP11 wires `pi.registerCommand`
-// in src/main.ts and calls `dcpPanelHandler`.
+// The command itself is NOT registered here — src/main.ts wires
+// `pi.registerCommand` and calls `dcpPanelHandler`.
 // ---------------------------------------------------------------------------
 
 const MANUAL_MODE_ON = "Manual mode is now ON. Use /dcp-compress to trigger context tools manually."
@@ -30,7 +27,7 @@ const MANUAL_MODE_OFF = "Manual mode is now OFF."
 const USAGE_HINT = "Usage: /dcp [stats|manual [on|off]|context]"
 
 /**
- * Dependencies injected by WP11 (src/main.ts). The handler stays side-effect
+ * Dependencies injected by src/main.ts. The handler stays side-effect
  * free with respect to Pi registration: it only reads/writes state through
  * these accessors.
  */
@@ -39,7 +36,7 @@ export interface DcpPanelDeps {
   config: ResolvedConfig
   /** Resolve the live DcpState service (get/update over `SessionState`). */
   getDcpState: () => DcpStateService
-  /** Persist the reload-relevant state slice (src/state.ts `saveState`). */
+  /** Persist the reload-relevant state slice via `saveState`. */
   saveState: (pi: ExtensionAPI, state: SessionState) => void
 }
 
@@ -55,7 +52,7 @@ export function parseSubcommand(args: string): { subcommand: string; subArgs: st
 }
 
 /**
- * Manual-mode toggle semantics (mirror SRC/lib/commands/manual.ts:48-55):
+ * Manual-mode toggle semantics:
  *   "on"  -> "active"
  *   "off" -> false
  *   none  -> toggle (false -> "active", anything else -> false)
@@ -180,7 +177,7 @@ async function handleManualToggle(
 }
 
 // ---------------------------------------------------------------------------
-// Command handler (wired by WP11 into pi.registerCommand("dcp", ...))
+// Command handler (wired by src/main.ts into pi.registerCommand("dcp", ...))
 // ---------------------------------------------------------------------------
 
 /**

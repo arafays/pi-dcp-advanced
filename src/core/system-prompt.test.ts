@@ -5,7 +5,7 @@ import { defaultConfig } from "./config.js"
 import { createEmptySessionState, type SessionState } from "./state.js"
 import { onBeforeAgentStart, renderSystemPrompt } from "./system-prompt.js"
 
-// The `pi` parameter is reserved for WP11 wiring and unused by this hook.
+// The `pi` parameter is reserved for factory wiring and unused by this hook.
 const unusedPi = null as unknown as ExtensionAPI
 
 const makeState = (manualMode: SessionState["manualMode"] = false): SessionState => {
