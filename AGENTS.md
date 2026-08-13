@@ -1,38 +1,48 @@
 # AGENTS.md
 
-`pi-dcp` is a **new package** — an exact port of the `@tarquinen/opencode-dcp` OpenCode plugin to a **Pi extension**. It is not a wrapper: logic is rewritten to operate directly on Pi's `AgentMessage[]`.
+`pi-dcp` is a Pi extension: an exact port of the OpenCode plugin `@tarquinen/opencode-dcp` rewritten to operate directly on Pi's `AgentMessage[]` (not a wrapper). Entry point is `src/main.ts` (a Pi `ExtensionFactory`, `export default async function (pi)`), wired via `"pi": { "extensions": ["./src/main.ts"] }` in `package.json`.
 
-- **`PLAN.md` is the spec** — read it first. It has the verified Pi API facts, the OpenCode-hook → Pi-event mapping table, the file-by-file Work Package breakdown, and the stable-identity design.
-- `src/main.ts` is currently empty; the port is not yet scaffolded. `package.json` still has a placeholder `test` script and no `pi.extensions` field — add both when scaffolding.
-- The source being ported (**not** part of this repo) lives one level up as `../opencode-dynamic-context-pruning` (package `@tarquinen/opencode-dcp`, entry `index.ts` + `lib/**`); read it directly via `read`/`bash` (resolved from `(repo)/../opencode-dynamic-context-pruning/`). **Do not port the parent's toolchain (npm/tsup/prettier) — see below.**
+The upstream source it ports lives one level up at `../opencode-dynamic-context-pruning` (`index.ts` + `lib/**`); read it directly by path. Do NOT port the parent's toolchain (npm/tsup/prettier) — this repo uses aube/biome/tsgo.
 
-## Implementation context
+## Toolchain
 
-This port is implemented through **Pi**, not OpenCode. `.opencode/opencode.json` is OpenCode-era config; pi does not parse or honor it, so its `references` (e.g. `dcp-source`) and `agent` subagent entries (`worker`, `explore`) have **no effect** under Pi — do not rely on them. All port work happens in the main Pi session; reach the sibling source by its plain path above rather than via the opencode.json reference key.
+- Package manager is `aube` (not npm/pnpm/yarn; lockfile `aube-lock.yaml`), activated via `mise` (`mise.toml` → `aube = "latest"`). Run project binaries with `aube exec <bin>` (alias `aube x`).
+- Runtime is Effect v4 (`effect@^4.0.0-rc.108`); tests use `@effect/vitest` (pinned `4.0.0-rc.108`).
 
-## Subagents (`pi-subagents` extension)
+Verified commands:
 
-The `pi-subagents` extension is installed, so WPs can be delegated to focused child agents and run in parallel. Built-ins: `worker` (implementation), `scout` (codebase recon), `reviewer` (diff/plan review), `oracle` (decision-consistency), `researcher` (web/API lookup), `delegate` (lightweight, parent-model inherit), `visual` (vision). The main session stays the orchestrator: `scout` → `worker` → `reviewer`/`oracle`. See `PLAN.md`'s preamble for the per-WP delegation map. Note: this is about **orchestrating the port** — porting DCP's *own* `allowSubAgents` / subagent-context handling feature remains **out of scope**.
+- `aube test` — runs the `test` script (`aube exec vitest run`; 14 files, 125 tests). Single file: `aube exec vitest run src/core/state.test.ts`; single test: append `-t "name"`.
+- `aube exec tsc --noEmit` — typecheck (`typescript@^7.0.2` = the native Go compiler, patched with the Effect LSP, so it also emits Effect suggestions).
+- `aube exec effect-tsgo diagnostics --project tsconfig.json` — dedicated Effect LSP diagnostics pass (also `--file`, `--format json|text|pretty|github-actions`).
+- `aube exec biome check src` — lint+format; `aube exec biome format src --write` to autofix.
 
-## Toolchain (differs from the parent repo — do not mix)
+tsgo / Effect LSP (`@effect/tsgo`):
 
-- Package manager: **`aube`**, not npm/pnpm (lockfile `aube-lock.yaml`). Activated via **`mise`** (`mise.toml` → `aube = "latest"`). Use `aube install`, `aube add <dep>`, `aube run <script>`, `aube test`.
-- Formatter/linter: **`biome`** (`biome.json`: 2-space indent, double quotes, no semicolons, no trailing commas, lineWidth 120). Verify with `aube exec biome check src` / `aube exec biome format src`.
-- TypeScript 7 via `@effect/tsgo`; runtime dep `effect@^4.0.0-rc.108`, plus `@effect/language-service` for the LSP. Typecheck with `aube exec effect-tsgo --noEmit` (the binary is `effect-tsgo`; `tsc` is also installed).
-- Before writing any Effect code, read `node_modules/effect/AGENTS.md` and the local skill `.agents/skills/effect/SKILL.md` (skill name is `effect`, not `effect-ts`).
-- `tsconfig.json` is strict with `noUncheckedIndexedAccess` + `exactOptionalPropertyTypes` + `verbatimModuleSyntax` — mind these when porting (the parent's `tsconfig` is looser).
+- `@effect/tsgo` is a superset of native `tsgo` with the Effect language service built in. `typescript@7` (native) is required alongside it; both are devDeps. `prepare` (`aube exec effect-tsgo patch`) patches the native `tsc` binary so `tsc --noEmit` emits Effect diagnostics (idempotent — skips if already patched; `effect-tsgo unpatch` reverts). The `tsconfig.json` `plugins: [{ "name": "@effect/language-service" }]` entry activates the LSP (the plugin name stays `@effect/language-service` even though the package is `@effect/tsgo`).
+- Do NOT use `effect-tsgo --noEmit` — the `effect-tsgo`/`tsgo` binary is the Effect language-service CLI (subcommands `patch`/`unpatch`/`diagnostics`/`setup`/`config`/`get-exe-path`), not a drop-in `tsc`. Typecheck with `tsc`.
+- Effect diagnostics surface as `suggestion` severity by default (`ignoreEffectSuggestionsInTscExitCode: true`), so `tsc --noEmit` still exits 0.
 
-## Load-bearing Pi facts (from PLAN.md — source-checked)
+Gotchas:
 
-- `pi.on("context", handler)` fires before every LLM call; `event.messages` is a deep copy of `AgentMessage[]`. Returns `{ messages: AgentMessage[] }` to replace. Non-destructive — the session tree is untouched.
-- `AgentMessage` union: `UserMessage | AssistantMessage | ToolResultMessage | BashExecutionMessage | CustomMessage | BranchSummaryMessage | CompactionSummaryMessage`. `AssistantMessage.content` carries `ToolCall { type:"toolCall", id, name, arguments }` blocks; `ToolResultMessage { toolCallId, … }`.
-- Prune/dedup/purge maps are keyed by stable `toolCallId` (`ToolResultMessage.toolCallId`); compression blocks are keyed by stable branch **entry ids** (`ctx.sessionManager.getBranch()` → 8-char hex ids).
-- `ctx.getContextUsage()` → `{ tokens, contextWindow, percent } | undefined` — **replaces DCP's manual token counting** for nudge thresholds.
-- Persist non-LLM state via `pi.appendEntry("dcp-state", …)` (survives `/reload`, branch-aware; custom entries do NOT enter LLM context). Inject LLM-visible summaries/nudges by returning modified `AgentMessage[]` (or use `CustomMessage` for durable+visible content).
-- `pi.registerTool` / `pi.registerCommand` for the `compress` tool and `/dcp` command.
-- Config cascade (pi-specific, not the parent's `dcp.jsonc` paths): `~/.pi/agent/dcp.json` > `.pi/dcp.json`.
-- Locked scope: core + TUI panel. **Out of scope:** message-mode compress, custom prompt overrides, autoUpdate, secure-mode/auth, subagent handling, protect-tags/protectUserMessages, hallucination stripping. Do not port these.
+- `biome.json` style differs from TS defaults: 2-space indent, double quotes, NO semicolons, no trailing commas, lineWidth 120.
+- `tsconfig.json` is strict: `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, `verbatimModuleSyntax`, `isolatedModules`, `module: nodenext`. Relative imports must use `.js` extensions; type-only imports must use `import type`.
 
-## Local skills
+## Differential tests (do not "fix" them)
 
-`.agents/skills/` bundles `effect` (Effect v4 patterns) and `opentui` (Solid/React terminal-UI bindings) — relevant when building the `/dcp` TUI panel via `ctx.ui.custom`.
+`*.diff.test.ts` files import the REAL upstream source directly, e.g. `import ... from "../../../opencode-dynamic-context-pruning/lib/compress/state.ts"` — extensionless `.ts` imports that vitest/esbuild resolves but tsgo/nodenext rejects. They are runtime-only: `tsconfig.json` excludes `src/**/*.diff.test.ts` from typecheck. They assert structural parity between the port and upstream. Keep those imports as-is.
+
+## Architecture
+
+- `src/main.ts` — the extension factory. Registers event hooks (`session_start`, `session_shutdown`, `tool_call`, `tool_result`, `tool_execution_start`, `tool_execution_end`, `before_agent_start`, `context`) + the `compress` tool + `/dcp` and `/dcp-compress` commands. Handlers NEVER throw — on error they notify (when a UI exists) and return unchanged results.
+- `src/core/` — config, state, tracking, prune, message-ids, nudges, system-prompt.
+- `src/strategies/` — `deduplicate` + `purgeErrors` (mark-then-apply: write pruned tool-call ids into `state.prune.tools`; pure, mutate `state` in place).
+- `src/compress/` — the `compress` range tool.
+- `src/commands/` — `dcp-tui` (`/dcp` panel) and `dcp-command` (`/dcp-compress` trigger).
+
+Config cascade: `~/.pi/agent/dcp.json` (global) > `.pi/dcp.json` (project), deep-merged over defaults; missing files fall back to defaults (see `src/core/config.ts`). `.pi/` is gitignored.
+
+Durable state (prune map, nudges, stats, manualMode) persists via `pi.appendEntry("dcp-state", …)` (see `src/core/state.ts` `saveState`/`loadState`); custom entries do NOT enter LLM context. LLM-visible content is injected by returning modified `AgentMessage[]` from the `context` handler.
+
+## Skills
+
+`.agents/skills/` (and `.claude/skills/`) bundle `effect` (Effect v4 patterns) and `opentui` (terminal-UI bindings). Read `node_modules/effect/AGENTS.md` and `.agents/skills/effect/SKILL.md` before writing Effect code.

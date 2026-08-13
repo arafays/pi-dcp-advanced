@@ -1,5 +1,7 @@
 import type { ExtensionAPI, ExtensionContext, SessionEntry } from "@earendil-works/pi-coding-agent"
 import { describe, expect, it } from "@effect/vitest"
+import { defaultConfig } from "../core/config.js"
+import { type CompressionBlock, createEmptySessionState } from "../core/state.js"
 import {
   COMPRESSED_BLOCK_HEADER,
   type CompressRangeToolArgs,
@@ -10,8 +12,6 @@ import {
   parseBlockPlaceholders,
   wrapCompressedSummary
 } from "./compress.js"
-import { defaultConfig } from "./config.js"
-import { type CompressionBlock, createEmptySessionState } from "./state.js"
 
 // ---------------------------------------------------------------------------
 // Fixtures

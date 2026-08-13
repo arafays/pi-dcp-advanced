@@ -1,6 +1,6 @@
 import { describe, expect, it } from "@effect/vitest"
-import { defaultConfig, type ResolvedConfig } from "./config.js"
-import { createEmptySessionState, type SessionState, type ToolParameterEntry } from "./state.js"
+import { defaultConfig, type ResolvedConfig } from "../core/config.js"
+import { createEmptySessionState, type SessionState, type ToolParameterEntry } from "../core/state.js"
 import { deduplicate, purgeErrors } from "./strategies.js"
 
 function entry(

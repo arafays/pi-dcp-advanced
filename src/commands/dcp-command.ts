@@ -1,7 +1,7 @@
 import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-coding-agent"
 import { Effect } from "effect"
-import { buildCompressedBlockGuidance } from "./nudges.js"
-import type { PendingManualTrigger, SessionState } from "./state.js"
+import { buildCompressedBlockGuidance } from "../core/nudges.js"
+import type { PendingManualTrigger, SessionState } from "../core/state.js"
 
 // ---------------------------------------------------------------------------
 // /dcp-compress [focus] command (WP10)

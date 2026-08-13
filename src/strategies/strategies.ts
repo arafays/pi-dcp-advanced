@@ -1,6 +1,6 @@
-import type { ResolvedConfig } from "./config.js"
-import { getFilePathsFromParameters, isFilePathProtected, isToolNameProtected } from "./prune.js"
-import type { SessionState } from "./state.js"
+import type { ResolvedConfig } from "../core/config.js"
+import { getFilePathsFromParameters, isFilePathProtected, isToolNameProtected } from "../core/prune.js"
+import type { SessionState } from "../core/state.js"
 
 // ---------------------------------------------------------------------------
 // Automatic context-pruning strategies (ported from lib/strategies/).

@@ -5,7 +5,7 @@ import {
   formatMessageRef as srcFormatMessageRef,
   parseBlockRef as srcParseBlockRef,
   parseMessageRef as srcParseMessageRef
-} from "../../opencode-dynamic-context-pruning/lib/message-ids.ts"
+} from "../../../opencode-dynamic-context-pruning/lib/message-ids.ts"
 import { formatBlockRef, formatMessageIdTag, formatMessageRef, parseBlockRef, parseMessageRef } from "./message-ids.js"
 
 // ---------------------------------------------------------------------------

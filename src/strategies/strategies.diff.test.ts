@@ -2,9 +2,9 @@ import { describe, expect, it } from "@effect/vitest"
 import {
   deduplicate as srcDeduplicate,
   purgeErrors as srcPurgeErrors
-} from "../../opencode-dynamic-context-pruning/lib/strategies/index.ts"
-import { defaultConfig, type ResolvedConfig } from "./config.js"
-import { createEmptySessionState, type SessionState, type ToolParameterEntry } from "./state.js"
+} from "../../../opencode-dynamic-context-pruning/lib/strategies/index.ts"
+import { defaultConfig, type ResolvedConfig } from "../core/config.js"
+import { createEmptySessionState, type SessionState, type ToolParameterEntry } from "../core/state.js"
 import { deduplicate, purgeErrors } from "./strategies.js"
 
 // ---------------------------------------------------------------------------

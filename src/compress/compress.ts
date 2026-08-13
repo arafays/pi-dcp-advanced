@@ -6,8 +6,8 @@ import {
   type SessionEntry,
   sessionEntryToContextMessages
 } from "@earendil-works/pi-coding-agent"
-import type { ResolvedConfig } from "./config.js"
-import { getFilePathsFromParameters, isFilePathProtected, isToolNameProtected } from "./prune.js"
+import type { ResolvedConfig } from "../core/config.js"
+import { getFilePathsFromParameters, isFilePathProtected, isToolNameProtected } from "../core/prune.js"
 import {
   allocateBlockId,
   allocateRunId,
@@ -17,7 +17,7 @@ import {
   type SelectionResolution,
   type SessionState,
   saveState
-} from "./state.js"
+} from "../core/state.js"
 
 // ---------------------------------------------------------------------------
 // Prompts (verbatim from the DCP source)

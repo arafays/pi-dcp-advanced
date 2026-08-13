@@ -13,7 +13,8 @@
     ]
   },
   "scripts": {
-    "test": "aube exec vitest run"
+    "test": "aube exec vitest run",
+    "prepare": "aube exec effect-tsgo patch"
   },
   "dependencies": {
     "effect": "^4.0.0-rc.108"

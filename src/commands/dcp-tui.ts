@@ -8,8 +8,8 @@ import type {
 import { DynamicBorder } from "@earendil-works/pi-coding-agent"
 import { Container, matchesKey, Text } from "@earendil-works/pi-tui"
 import { Effect } from "effect"
-import type { ResolvedConfig } from "./config.js"
-import type { DcpStateService, SessionState } from "./state.js"
+import type { ResolvedConfig } from "../core/config.js"
+import type { DcpStateService, SessionState } from "../core/state.js"
 
 // ---------------------------------------------------------------------------
 // WP9 — /dcp TUI panel

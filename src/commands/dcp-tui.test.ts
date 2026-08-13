@@ -1,5 +1,6 @@
 import type { ContextUsage } from "@earendil-works/pi-coding-agent"
 import { describe, expect, it } from "@effect/vitest"
+import { createEmptySessionState } from "../core/state.js"
 import {
   countPrunedMessages,
   formatBlockList,
@@ -8,7 +9,6 @@ import {
   parseSubcommand,
   toggleManualMode
 } from "./dcp-tui.js"
-import { createEmptySessionState } from "./state.js"
 
 describe("parseSubcommand", () => {
   it("returns empty subcommand for no args", () => {

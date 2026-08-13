@@ -3,7 +3,7 @@ import {
   allocateBlockId as srcAllocateBlockId,
   allocateRunId as srcAllocateRunId,
   applyCompressionState as srcApply
-} from "../../opencode-dynamic-context-pruning/lib/compress/state.ts"
+} from "../../../opencode-dynamic-context-pruning/lib/compress/state.ts"
 import {
   type CompressionBlock,
   type CompressionStateInput,

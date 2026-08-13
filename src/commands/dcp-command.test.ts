@@ -1,8 +1,8 @@
 import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-coding-agent"
 import { describe, expect, it } from "@effect/vitest"
 import { Effect } from "effect"
+import { createEmptySessionState, type SessionState } from "../core/state.js"
 import { buildTriggerPrompt, COMPRESS_TRIGGER_PROMPT, type DcpCompressDeps, dcpCompressHandler } from "./dcp-command.js"
-import { createEmptySessionState, type SessionState } from "./state.js"
 
 interface SentMessage {
   prompt: string
