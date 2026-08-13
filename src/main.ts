@@ -3,6 +3,7 @@ import { Effect, Option } from "effect"
 import { dcpCompressHandler } from "./commands/dcp-command.js"
 import { dcpPanelHandler } from "./commands/dcp-tui.js"
 import { createCompressTool } from "./compress/compress.js"
+import { registerNotificationRenderer } from "./compress/notification.js"
 import { defaultConfig, loadConfig, type ResolvedConfig } from "./core/config.js"
 import { assignMessageRefs, getMessageEntries, injectMessageIds } from "./core/message-ids.js"
 import { injectNudges } from "./core/nudges.js"
@@ -191,6 +192,9 @@ export default async function (pi: ExtensionAPI): Promise<void> {
 
   // --- compress range tool ------------------------------------------------
   pi.registerTool(createCompressTool({ config, getState, pi }))
+
+  // Renderer for chat-mode compression notifications (durable, non-LLM entries).
+  registerNotificationRenderer(pi)
 
   // --- commands ------------------------------------------------------------
   pi.registerCommand("dcp", {

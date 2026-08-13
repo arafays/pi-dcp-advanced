@@ -18,6 +18,7 @@ import {
   type SessionState,
   saveState
 } from "../core/state.js"
+import { notifyCompression } from "./notification.js"
 
 // ---------------------------------------------------------------------------
 // Prompts (verbatim from the DCP source)
@@ -841,6 +842,9 @@ export function createCompressTool(deps: CompressToolDeps) {
         const runId = allocateRunId(state)
         const blocks: CompressBlockResult[] = []
         let totalCompressedMessages = 0
+        let newlyCompressedMessageCount = 0
+        let newlyCompressedToolCount = 0
+        let tokensRemoved = 0
 
         for (const prepared of preparedPlans) {
           const blockId = allocateBlockId(state)
@@ -867,10 +871,22 @@ export function createCompressTool(deps: CompressToolDeps) {
           )
 
           totalCompressedMessages += applied.messageIds.length
+          newlyCompressedMessageCount += applied.newlyCompressedMessageIds.length
+          newlyCompressedToolCount += applied.newlyCompressedToolIds.length
+          tokensRemoved += applied.compressedTokens
           blocks.push({ blockId, runId, messageCount: applied.messageIds.length })
         }
 
         saveState(deps.pi, state)
+
+        notifyCompression(deps.pi, ctx, deps.config, {
+          topic: input.topic,
+          runId,
+          messageCount: newlyCompressedMessageCount,
+          toolCount: newlyCompressedToolCount,
+          tokensRemoved,
+          tokensSavedTotal: state.stats.totalPruneTokens
+        })
 
         const details: CompressToolDetails = { compressedRanges: preparedPlans.length, blocks }
         const text = `Compressed ${totalCompressedMessages} messages into ${COMPRESSED_BLOCK_HEADER}.`

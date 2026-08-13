@@ -100,8 +100,11 @@ describe("compress tool", () => {
     expect(result.content[0]?.type).toBe("text")
 
     // persisted via saveState -> pi.appendEntry("dcp-state", ...)
-    expect(entries.length).toBe(1)
-    expect(entries[0]?.type).toBe("dcp-state")
+    // plus the chat-mode notification -> pi.appendEntry("dcp-notification", ...)
+    expect(entries.some((e) => e.type === "dcp-state")).toBe(true)
+    expect(entries.some((e) => e.type === "dcp-notification")).toBe(true)
+    const dcpStateEntry = entries.find((e) => e.type === "dcp-state")
+    expect(dcpStateEntry).toBeDefined()
   })
 
   it("rejects overlapping ranges", async () => {

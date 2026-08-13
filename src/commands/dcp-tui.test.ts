@@ -2,9 +2,13 @@ import type { ContextUsage } from "@earendil-works/pi-coding-agent"
 import { describe, expect, it } from "@effect/vitest"
 import { createEmptySessionState } from "../core/state.js"
 import {
+  computeSessionStats,
   countPrunedMessages,
   formatBlockList,
+  formatCompressionRatio,
   formatContextUsage,
+  formatDuration,
+  formatTokenCount,
   manualModeLabel,
   parseSubcommand,
   toggleManualMode
@@ -100,5 +104,124 @@ describe("countPrunedMessages", () => {
 
   it("returns 0 for a fresh state", () => {
     expect(countPrunedMessages(createEmptySessionState())).toBe(0)
+  })
+})
+
+describe("formatTokenCount", () => {
+  it("keeps sub-1000 token counts verbatim", () => {
+    expect(formatTokenCount(0)).toBe("0")
+    expect(formatTokenCount(999)).toBe("999")
+  })
+
+  it("abbreviates >= 1000 tokens", () => {
+    expect(formatTokenCount(1000)).toBe("1K")
+    expect(formatTokenCount(1500)).toBe("1.5K")
+    expect(formatTokenCount(123456)).toBe("123.5K")
+  })
+})
+
+describe("formatDuration", () => {
+  it("formats sub-second and second-scale durations", () => {
+    expect(formatDuration(0)).toBe("0 ms")
+    expect(formatDuration(900)).toBe("900 ms")
+    expect(formatDuration(1500)).toBe("1.5 s")
+  })
+
+  it("formats minute and hour scale durations", () => {
+    expect(formatDuration(125000)).toBe("2m 5s")
+    expect(formatDuration(3723000)).toBe("1h 2m 3s")
+  })
+
+  it("clamps negative inputs", () => {
+    expect(formatDuration(-500)).toBe("0 ms")
+  })
+})
+
+describe("formatCompressionRatio", () => {
+  it("returns 0:1 when nothing saved", () => {
+    expect(formatCompressionRatio(0, 100)).toBe("0:1")
+  })
+
+  it("returns ∞:1 when there is no summary size", () => {
+    expect(formatCompressionRatio(500, 0)).toBe("∞:1")
+  })
+
+  it("rounds the saved:summary ratio", () => {
+    expect(formatCompressionRatio(1000, 250)).toBe("4:1")
+    expect(formatCompressionRatio(1000, 300)).toBe("3:1")
+  })
+})
+
+describe("computeSessionStats", () => {
+  it("aggregates totals, summary tokens, and duration from active blocks", () => {
+    const state = createEmptySessionState()
+    state.stats.totalPruneTokens = 5000
+    state.prune.tools.set("t1", 100)
+    state.prune.messages.byMessageId.set("e1", { tokenCount: 10, allBlockIds: [1], activeBlockIds: [1] })
+    state.prune.messages.blocksById.set(1, {
+      blockId: 1,
+      runId: 1,
+      active: true,
+      deactivatedByUser: false,
+      compressedTokens: 5000,
+      summaryTokens: 1000,
+      durationMs: 2500,
+      topic: "t",
+      startId: "e1",
+      endId: "e1",
+      anchorMessageId: "e1",
+      compressMessageId: "",
+      includedBlockIds: [],
+      consumedBlockIds: [],
+      parentBlockIds: [],
+      directMessageIds: ["e1"],
+      directToolIds: [],
+      effectiveMessageIds: ["e1"],
+      effectiveToolIds: [],
+      createdAt: 0,
+      summary: "s"
+    })
+
+    expect(computeSessionStats(state)).toEqual({
+      tokensSaved: 5000,
+      summaryTokens: 1000,
+      compressionRatio: "5:1",
+      compressionDurationMs: 2500,
+      toolsPruned: 1,
+      messagesPruned: 1
+    })
+  })
+
+  it("ignores inactive blocks", () => {
+    const state = createEmptySessionState()
+    state.stats.totalPruneTokens = 3000
+    state.prune.messages.blocksById.set(1, {
+      blockId: 1,
+      runId: 1,
+      active: false,
+      deactivatedByUser: false,
+      compressedTokens: 3000,
+      summaryTokens: 900,
+      durationMs: 5000,
+      topic: "t",
+      startId: "e1",
+      endId: "e1",
+      anchorMessageId: "e1",
+      compressMessageId: "",
+      includedBlockIds: [],
+      consumedBlockIds: [],
+      parentBlockIds: [],
+      directMessageIds: [],
+      directToolIds: [],
+      effectiveMessageIds: [],
+      effectiveToolIds: [],
+      createdAt: 0,
+      summary: "s"
+    })
+
+    const stats = computeSessionStats(state)
+    expect(stats.summaryTokens).toBe(0)
+    expect(stats.compressionDurationMs).toBe(0)
+    expect(stats.tokensSaved).toBe(3000)
   })
 })
