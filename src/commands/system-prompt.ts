@@ -1,6 +1,6 @@
 import type { ExtensionAPI, ExtensionCommandContext, Theme, ToolInfo } from "@earendil-works/pi-coding-agent"
 import { copyToClipboard } from "@earendil-works/pi-coding-agent"
-import { matchesKey, type TUI, visibleWidth, wrapTextWithAnsi } from "@earendil-works/pi-tui"
+import { matchesKey, type TUI, truncateToWidth, visibleWidth, wrapTextWithAnsi } from "@earendil-works/pi-tui"
 
 // ---------------------------------------------------------------------------
 // /system-prompt — Display the full system prompt and tool definitions
@@ -107,12 +107,16 @@ export function buildToolLines(tools: ToolInfo[]): string[] {
   return lines
 }
 
-/** Number of content rows visible inside the overlay. */
+/** Overlay height cap as a fraction of the terminal, kept in sync with overlayOptions.maxHeight. */
+const OVERLAY_MAX_HEIGHT_FRACTION = 0.8
+
+/** Non-content chrome rows: top border, header, blank, blank-before-footer, footer, bottom border. */
+const OVERLAY_CHROME_ROWS = 6
+
+/** Number of content rows visible inside the overlay at the current terminal height. */
 export function visibleContentRows(termRows: number): number {
   if (!termRows || termRows <= 0) return 30
-  // Overlay is 92% of terminal height minus 2 border rows, 1 header, 1 blank,
-  // and 1 footer separator + footer row (4 rows of chrome).
-  return Math.max(1, Math.floor(termRows * 0.92) - 4)
+  return Math.max(1, Math.floor(termRows * OVERLAY_MAX_HEIGHT_FRACTION) - OVERLAY_CHROME_ROWS)
 }
 
 // ---------------------------------------------------------------------------
@@ -210,7 +214,7 @@ function createSystemPromptView(
   const render = (width: number): string[] => {
     const th = theme
     const innerW = width - 2
-    const contentW = innerW - 1
+    const contentW = Math.max(1, innerW - 1)
     const rows = visible()
 
     const displayLines = buildDisplayLines(allLines, contentW)
@@ -229,10 +233,13 @@ function createSystemPromptView(
     out.push(th.fg("border", `╭${"─".repeat(innerW)}╮`))
     out.push(
       row(
-        ` ${th.fg("accent", th.bold("System Prompt"))}  ${th.fg(
-          "dim",
-          `— ${promptLineCount} lines, ${promptCharCount.toLocaleString()} chars`
-        )}  ${th.fg("dim", `|  ${allTools.length} tools`)}`
+        truncateToWidth(
+          ` ${th.fg("accent", th.bold("System Prompt"))}  ${th.fg(
+            "dim",
+            `— ${promptLineCount} lines, ${promptCharCount.toLocaleString()} chars`
+          )}  ${th.fg("dim", `|  ${allTools.length} tools`)}`,
+          innerW
+        )
       )
     )
     out.push(row(""))
@@ -261,7 +268,7 @@ function createSystemPromptView(
     const leftVis = visibleWidth(footerLeft)
     const rightVis = visibleWidth(footerRight)
     const gap = Math.max(1, innerW - 1 - leftVis - rightVis)
-    const footer = ` ${th.fg("dim", footerLeft)}${" ".repeat(gap)}${th.fg("dim", footerRight)}`
+    const footer = truncateToWidth(` ${th.fg("dim", footerLeft)}${" ".repeat(gap)}${th.fg("dim", footerRight)}`, innerW)
     out.push(row(""))
     out.push(row(footer))
 
@@ -320,8 +327,9 @@ export async function systemPromptHandler(
       {
         overlay: true,
         overlayOptions: {
-          width: "95%",
-          maxHeight: "92%",
+          width: "90%",
+          maxHeight: "80%",
+          minWidth: 40,
           anchor: "center",
           margin: 0
         }

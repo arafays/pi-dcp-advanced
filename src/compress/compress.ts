@@ -777,6 +777,14 @@ export function createCompressTool(deps: CompressToolDeps) {
     name: "compress",
     label: "Compress Context",
     description: COMPRESS_RANGE + RANGE_FORMAT_EXTENSION,
+    // One-line entry for the default system prompt's "Available tools" section.
+    // Without this, custom tools are omitted from that list even though they
+    // remain callable — which is why `compress` was invisible in the prompt.
+    promptSnippet: "Collapse a range of conversation messages into an exhaustive technical summary to free context",
+    // Guideline bullets appended to the default "Guidelines" section while the tool is active.
+    promptGuidelines: [
+      "Use compress to collapse closed conversation sections into dense summaries when context grows stale"
+    ],
     parameters: compressParameters,
     async execute(toolCallId, params, _signal, _onUpdate, ctx) {
       const input = params as CompressRangeToolArgs
