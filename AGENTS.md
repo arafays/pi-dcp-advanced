@@ -1,8 +1,6 @@
 # AGENTS.md
 
-`pi-dcp` is a Pi extension: an exact port of the OpenCode plugin `@tarquinen/opencode-dcp` rewritten to operate directly on Pi's `AgentMessage[]` (not a wrapper). Entry point is `src/main.ts` (a Pi `ExtensionFactory`, `export default async function (pi)`), wired via `"pi": { "extensions": ["./src/main.ts"] }` in `package.json`.
-
-The upstream source it ports lives one level up at `../opencode-dynamic-context-pruning` (`index.ts` + `lib/**`); read it directly by path. Do NOT port the parent's toolchain (npm/tsup/prettier) — this repo uses aube/biome/tsgo.
+`pi-dcp` is a Pi extension that implements Dynamic Context Pruning (DCP) natively on Pi's `AgentMessage[]`. Entry point is `src/main.ts` (a Pi `ExtensionFactory`, `export default async function (pi)`), wired via `"pi": { "extensions": ["./src/main.ts"] }` in `package.json`.
 
 ## Toolchain
 
@@ -26,10 +24,6 @@ Gotchas:
 
 - `biome.json` style differs from TS defaults: 2-space indent, double quotes, NO semicolons, no trailing commas, lineWidth 120.
 - `tsconfig.json` is strict: `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, `verbatimModuleSyntax`, `isolatedModules`, `module: nodenext`. Relative imports must use `.js` extensions; type-only imports must use `import type`.
-
-## Differential tests (do not "fix" them)
-
-`*.diff.test.ts` files import the REAL upstream source directly, e.g. `import ... from "../../../opencode-dynamic-context-pruning/lib/compress/state.ts"` — extensionless `.ts` imports that vitest/esbuild resolves but tsgo/nodenext rejects. They are runtime-only: `tsconfig.json` excludes `src/**/*.diff.test.ts` from typecheck. They assert structural parity between the port and upstream. Keep those imports as-is.
 
 ## Architecture
 
