@@ -224,6 +224,11 @@ export function applyCompressedRanges(messages: AgentMessage[], state: SessionSt
   if (entryIds.length !== messages.length) return
 
   const result: AgentMessage[] = []
+  // Tool-call ids whose assistant message was dropped by a compression range.
+  // Their tool results (which follow the assistant and may sit OUTSIDE the
+  // range) must be dropped too, or the provider rejects the orphaned `tool`
+  // role message (no preceding assistant tool_calls).
+  const droppedToolCallIds = new Set<string>()
 
   for (let i = 0; i < messages.length; i++) {
     const message = messages[i]
@@ -244,8 +249,22 @@ export function applyCompressedRanges(messages: AgentMessage[], state: SessionSt
     if (entryId !== undefined) {
       const pruneEntry = state.prune.messages.byMessageId.get(entryId)
       if (pruneEntry !== undefined && pruneEntry.activeBlockIds.length > 0) {
+        // Record the tool calls of a dropped assistant so their results are
+        // dropped too, keeping [assistant tool_calls + tool results] atomic.
+        if (message.role === "assistant" && Array.isArray(message.content)) {
+          for (const block of message.content) {
+            if (block.type === "toolCall" && typeof block.id === "string") {
+              droppedToolCallIds.add(block.id)
+            }
+          }
+        }
         continue
       }
+    }
+
+    // Orphan-proofing: drop a tool result whose assistant tool call was dropped.
+    if (message.role === "toolResult" && droppedToolCallIds.has(message.toolCallId)) {
+      continue
     }
 
     result.push(message)

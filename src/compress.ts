@@ -123,6 +123,8 @@ export interface SearchContext {
   rawMessagesById: Map<string, SessionEntry>
   rawIndexById: Map<string, number>
   summaryByBlockId: Map<number, CompressionBlock>
+  /** mNNNN message-ref -> branch entry id (state.messageIds.byRef). */
+  byRef: Map<string, string>
 }
 
 export interface ResolvedRangeCompression {
@@ -197,6 +199,13 @@ function parseBoundaryId(id: string): ParsedBoundaryId | null {
   }
 
   if (normalized.length === 0 || /\s/.test(normalized)) return null
+
+  const messageMatch = normalized.toLowerCase().match(/^m(\d{4})$/)
+  if (messageMatch !== null) {
+    const ref = normalized.toLowerCase()
+    return { kind: "message", ref, messageId: ref }
+  }
+
   return { kind: "message", ref: normalized, messageId: normalized }
 }
 
@@ -223,6 +232,15 @@ function buildBoundaryLookup(context: SearchContext): Map<string, BoundaryRefere
     }
   }
 
+  // mNNNN refs resolve through the stable message-ref map (entry-id keys).
+  for (const [ref, entryId] of context.byRef) {
+    const rawIndex = context.rawIndexById.get(entryId)
+    if (rawIndex === undefined) continue
+    if (!lookup.has(ref)) {
+      lookup.set(ref, { kind: "message", rawIndex, messageId: entryId })
+    }
+  }
+
   return lookup
 }
 
@@ -237,10 +255,10 @@ function resolveBoundaryIds(
   const parsedEndId = parseBoundaryId(endId)
 
   if (parsedStartId === null) {
-    issues.push("startId is invalid. Use a message entry ID or block ID (bN).")
+    issues.push("startId is invalid. Use mNNNN or bN.")
   }
   if (parsedEndId === null) {
-    issues.push("endId is invalid. Use a message entry ID or block ID (bN).")
+    issues.push("endId is invalid. Use mNNNN or bN.")
   }
   if (issues.length > 0) {
     throw new Error(issues.length === 1 ? issues[0] : issues.map((issue) => `- ${issue}`).join("\n"))
@@ -379,7 +397,7 @@ function buildSearchContext(ctx: ExtensionContext, state: SessionState): SearchC
     if (block.active) summaryByBlockId.set(blockId, block)
   }
 
-  return { rawMessages, rawMessagesById, rawIndexById, summaryByBlockId }
+  return { rawMessages, rawMessagesById, rawIndexById, summaryByBlockId, byRef: state.messageIds.byRef }
 }
 
 /** Find the assistant message entry that issued this compress tool call (for duration attachment). */

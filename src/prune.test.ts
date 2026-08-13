@@ -227,6 +227,47 @@ describe("prune", () => {
     expect(result[1]?.role).toBe("user")
   })
 
+  it("drops a tool result whose assistant tool call was dropped (orphan-proofing)", () => {
+    const state = createEmptySessionState()
+    const blockId = allocateBlockId(state)
+    // Compression range covers ONLY the assistant entry (e1), not its tool result (e2).
+    applyCompressionState(
+      state,
+      input("e1", "e1", "cm-1", state),
+      selection(["e1"], [["e1", 50]]),
+      "e1",
+      blockId,
+      "compressed summary",
+      []
+    )
+
+    const ctx = mockCtx(["e1", "e2"])
+    const assistant: AgentMessage = {
+      role: "assistant",
+      content: [{ type: "toolCall", id: "tc-1", name: "read", arguments: {} }],
+      api: "anthropic",
+      provider: "anthropic",
+      model: "claude",
+      usage: {
+        input: 0,
+        output: 0,
+        cacheRead: 0,
+        cacheWrite: 0,
+        totalTokens: 0,
+        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 }
+      },
+      stopReason: "stop",
+      timestamp: 0
+    }
+    const messages: AgentMessage[] = [assistant, toolResult("tc-1", "read", "file contents")]
+
+    const result = prune(messages, state, defaultConfig, ctx)
+
+    // Both the assistant and its orphaned tool result are dropped; only the summary remains.
+    expect(result).toHaveLength(1)
+    expect(asCustom(result[0]).content).toBe("compressed summary")
+  })
+
   it("does not mutate the caller's messages", () => {
     const state = createEmptySessionState()
     state.prune.tools.set("read-1", 100)

@@ -4,6 +4,7 @@ import { createCompressTool } from "./compress.js"
 import { defaultConfig, loadConfig, type ResolvedConfig } from "./config.js"
 import { dcpCompressHandler } from "./dcp-command.js"
 import { dcpPanelHandler } from "./dcp-tui.js"
+import { assignMessageRefs, getMessageEntries, injectMessageIds } from "./message-ids.js"
 import { injectNudges } from "./nudges.js"
 import { prune } from "./prune.js"
 import { createEmptySessionState, loadState, makeDcpState, type SessionState, saveState } from "./state.js"
@@ -133,6 +134,15 @@ export default async function (pi: ExtensionAPI): Promise<void> {
       }
 
       const state = Effect.runSync(dcpState.get())
+
+      // 0. Assign + inject mNNNN message-id refs so the model can reference
+      //    compression boundaries in the `compress` tool. Operates on the deep
+      //    copy `event.messages` (session tree untouched); tags on user /
+      //    assistant / toolResult messages survive the prune step below (prune
+      //    only rewrites marked toolResult content or drops compressed ranges).
+      const entries = getMessageEntries(ctx)
+      assignMessageRefs(state, entries)
+      injectMessageIds(state, config, event.messages, entries)
 
       // 1. Recomputed strategies seed the prune map (mark). Both mutate `state`
       //    in place — the Ref-held object — so no explicit update is required.

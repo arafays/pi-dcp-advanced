@@ -126,6 +126,27 @@ describe("compress tool", () => {
     expect(state.prune.messages.blocksById.size).toBe(0)
   })
 
+  it("resolves an mNNNN boundary through state.messageIds.byRef", async () => {
+    const state = createEmptySessionState()
+    state.messageIds.byRef.set("m0005", "e2")
+    const { pi } = mockPi()
+    const tool = createCompressTool({ config: defaultConfig, getState: () => state, pi })
+
+    const params: CompressRangeToolArgs = {
+      topic: "Test",
+      content: [{ startId: "e1", endId: "m0005", summary: "summary of e1..e2" }]
+    }
+
+    const result = await tool.execute("call-4", params, undefined, undefined, mockCtx(["e1", "e2", "e3"]))
+
+    const details = result.details as CompressToolDetails
+    expect(details.error).toBeUndefined()
+    const block = state.prune.messages.blocksById.get(1)
+    expect(block?.startId).toBe("e1")
+    expect(block?.endId).toBe("m0005")
+    expect(block?.effectiveMessageIds).toEqual(["e1", "e2"])
+  })
+
   it("rejects an unknown startId", async () => {
     const state = createEmptySessionState()
     const { pi } = mockPi()
