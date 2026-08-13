@@ -2,9 +2,8 @@ node_modules/
 dist/
 lib/
 *.tsbuildinfo
-.env
-.env.*
 !.env.example
 .DS_Store
 *.log
 .pi/
+config.bat

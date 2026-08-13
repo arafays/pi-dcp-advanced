@@ -1,7 +1,7 @@
 {
   "name": "pi-dcp",
   "version": "1.0.0",
-  "description": "Dynamic Context Pruning (DCP) for Pi — automatic deduplication, error purging, superseded-write pruning, and range-based compression that keep the agent context window sharp.",
+  "description": "Dynamic Context Pruning (DCP) for Pi \u2014 automatic deduplication, error purging, superseded-write pruning, and range-based compression that keep the agent context window sharp.",
   "keywords": [
     "pi-package",
     "pi",
@@ -33,7 +33,9 @@
     "test": "aube exec vitest run"
   },
   "dependencies": {
-    "effect": "^4.0.0-rc.108"
+    "dotenv": "^8.2.0",
+    "effect": "^4.0.0-rc.108",
+    "node-fetch": "^3.3.2"
   },
   "peerDependencies": {
     "@earendil-works/pi-ai": "*",
@@ -46,7 +48,6 @@
     "@earendil-works/pi-coding-agent": "^0.84.1",
     "@earendil-works/pi-tui": "0.84.1",
     "@effect/language-service": "^0.87.2",
-    "@effect/platform": "^0.97.1",
     "@effect/tsgo": "^0.36.4",
     "@effect/vitest": "4.0.0-rc.108",
     "typebox": "^1.3.12",
